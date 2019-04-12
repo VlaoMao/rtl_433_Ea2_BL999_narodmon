@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# After reboot, rtl_433 does not show anything, unless it has runned and stopped for a few times
+
+rtl_433 &
+sleep 3
+killall rtl_433
+sleep 3
+rtl_433 &
+sleep 3
+killall rtl_433
+sleep 3
+rtl_433 &
+killall rtl_433
