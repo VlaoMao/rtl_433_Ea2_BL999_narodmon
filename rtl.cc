@@ -177,6 +177,9 @@ void run_update()
         id = ret[id_key];
 
         //std::cout << "Found temp: " << temp << ", humidity: " << humidity << ", id: " << id << " id == device_id: " << (id == device_id) << std::endl;
+        if(id != device_id)
+            continue ;
+
         uploadToNarodmon(temp, humidity);
         break;
     }
