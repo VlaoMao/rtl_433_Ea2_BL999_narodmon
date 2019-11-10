@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <map>
 #include <iostream>
 #include <thread>
 #include <mutex>
@@ -7,11 +8,13 @@
 #include <chrono>
 
 //
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
+#include "boost/ptree.hpp"
+#include "boost/json_parser.hpp"
 //
 
 #include "sockets.h"
+
+using namespace std::chrono_literals;
 
 typedef std::pair<std::string, std::string> pair;
 typedef std::vector<std::string> string_vector;
@@ -21,6 +24,23 @@ std::mutex lock_mutex;
 string_vector str_vec;
 std::atomic<bool> thread_alive(true);
 std::string device_mac;
+std::string device_id;
+
+typedef std::map<const std::string, std::string> sensor_values_map;
+
+const std::string &temp_key = "temperature_C";
+const std::string &humidity_key = "humidity";
+const std::string &id_key = "id";
+
+sensor_values_map etalon_values = {
+    {"time", ""},
+    {"model", ""},
+    {id_key, ""},
+    {"channel", ""},
+    {"battery", ""},
+    {temp_key, ""},
+    {humidity_key, ""}
+};
 
 void print_container(string_vector &vec)
 {
@@ -55,9 +75,9 @@ void read_stdin_values()
     thread_alive = false;
 }
 
-pair parse_json(const std::string &str)
+sensor_values_map parse_json(const std::string &str)
 {
-    pair ret;
+    sensor_values_map ret;
 
     boost::property_tree::ptree pt;
 
@@ -69,15 +89,21 @@ pair parse_json(const std::string &str)
         std::string temp;
         std::string humidity;
         for (auto& array_element : pt) {
+            if(etalon_values.find(array_element.first) == etalon_values.end()) // Если не нашлось элемента с таким ключом, идём дальше
+                continue ;
+            else
+                ret[array_element.first] = array_element.second.get_value<std::string>();
+            /*
             if(array_element.first == "temperature_C")
                 temp = array_element.second.get_value<std::string>();
 
             if(array_element.first == "humidity")
                 humidity = array_element.second.get_value<std::string>();
+            */
         }
 
-        if((!temp.empty()) && (!humidity.empty()))
-            ret = pair(temp, humidity);
+        //if((!temp.empty()) && (!humidity.empty()))
+        //    ret = pair(temp, humidity);
     } catch (std::exception const& e) {
         std::cerr << e.what() << std::endl;
 
@@ -138,16 +164,19 @@ void run_update()
 {
     std::string temp;
     std::string humidity;
+    std::string id;
 
     auto rit = str_vec.rbegin();
     for(; rit != str_vec.rend(); rit ++) {
-        pair ret = parse_json(*rit);
-        if((ret.first.empty()) || (ret.second.empty()))
+        sensor_values_map ret = parse_json(*rit);
+        if((ret[temp_key].empty()) || (ret[humidity_key].empty()) || (ret[id_key].empty()))
             continue;
 
-        temp = ret.first;
-        humidity = ret.second;
-        //std::cout << "Found temp: " << ret.first << ", humidity: " << ret.second << std::endl;
+        temp = ret[temp_key];
+        humidity = ret[humidity_key];
+        id = ret[id_key];
+
+        //std::cout << "Found temp: " << temp << ", humidity: " << humidity << ", id: " << id << " id == device_id: " << (id == device_id) << std::endl;
         uploadToNarodmon(temp, humidity);
         break;
     }
@@ -157,23 +186,23 @@ void run_update()
 
 int main(int argc, char **argv)
 {
-    if(argc < 2) {
-        std::cerr << "Usage: rtl_433 -R 31 -F json | rtl_cxx device_mac\n";
+    if(argc < 3) {
+        std::cerr << "Usage: rtl_433 -R 31 -F json | rtl_cxx device_mac device_id\n";
         return 1;
     }
 
     device_mac = argv[1];
+    device_id = argv[2];
 
-    using namespace std::chrono_literals;
     //insertString(str_vec, "{\"time\" : \"2019-04-11 21:57:47\", \"model\" : \"TFA-Twin-Plus-30.3049\", \"id\" : 46, \"channel\" : 1, \"battery\" : \"OK\", \"temperature_C\" : 12.900, \"humidity\" : 48, \"mic\" : \"CHECKSUM\"}");
     std::thread in_thread(read_stdin_values);
     auto time_start = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> refresh_interval(6 * 60); // 6 min
+    //std::chrono::duration<double> refresh_interval(5); // 5 sec
 
     while(thread_alive) {
         auto time_current = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = time_current - time_start;
-
         if(elapsed >= refresh_interval) {
             time_start = std::chrono::high_resolution_clock::now();
             run_update();
