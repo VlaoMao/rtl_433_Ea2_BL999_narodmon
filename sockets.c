@@ -30,13 +30,13 @@ int create_connect_socket(const char *host, const char *port)
 
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        fprintf(stderr, "Socket()");
+        fprintf(stderr, "Socket(): %m\n");
         return -1;
     }
 
     if (connect(s, (struct sockaddr *)&server, sizeof(server)) < 0)
     {
-        fprintf(stderr, "Connect()");
+        fprintf(stderr, "Connect(): %m\n");
         return -1;
     }
 
