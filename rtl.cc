@@ -25,6 +25,7 @@ string_vector str_vec;
 std::atomic<bool> thread_alive(true);
 std::string device_mac;
 std::string device_id;
+std::string prev_humidity;
 
 typedef std::map<const std::string, std::string> sensor_values_map;
 
@@ -45,9 +46,8 @@ sensor_values_map etalon_values = {
 void print_container(string_vector &vec)
 {
     std::cout << "Container: \n";
-    for(auto str: vec) {
+    for(const auto& str: vec)
         std::cout << str << std::endl;
-    }
 }
 
 void insertString(string_vector &vec, std::string string)
@@ -175,6 +175,13 @@ void run_update()
         temp = ret[temp_key];
         humidity = ret[humidity_key];
         id = ret[id_key];
+
+        if((humidity == "99") && (prev_humidity == "99")) {
+                humidity = "98";
+                prev_humidity = "98";
+        } else {
+            prev_humidity = humidity;
+        }
 
         //std::cout << "Found temp: " << temp << ", humidity: " << humidity << ", id: " << id << " id == device_id: " << (id == device_id) << std::endl;
         if(id != device_id)
