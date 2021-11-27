@@ -13,6 +13,7 @@
 //
 
 #include "sockets.h"
+#include "serial/SerialPort.hpp"
 
 using namespace std::chrono_literals;
 
@@ -64,15 +65,47 @@ void clearStringContainer(string_vector &vec)
     vec.clear();
 }
 
-void read_stdin_values()
+void t_read_values(const std::string& usb_dev)
 {
-    std::string line;
-    while(std::getline(std::cin, line)) {
-        std::cout << "readed line: " << line << std::endl;
-        insertString(str_vec, line);
-    }
+    mn::CppLinuxSerial::SerialPort serialPort;
+    std::chrono::duration<double> timeout_interval(1);
+    
+    try {
+        serialPort.SetDevice(usb_dev);
+        serialPort.SetBaudRate(mn::CppLinuxSerial::BaudRate::B_115200);
+        serialPort.SetTimeout(0);
+        serialPort.Open();
 
-    thread_alive = false;
+        std::string data_acc;
+        std::string data;
+        auto time_read_start = std::chrono::high_resolution_clock::now();
+        auto time_read_elapsed = time_read_start;
+
+        while(true) {
+            serialPort.Read(data_acc);
+            if(data_acc.empty()) {
+                if((time_read_elapsed - time_read_start) > timeout_interval) {
+                    //timeout read
+                    if(!data.empty()) {
+                        std::cout << "readed data: " << data << std::endl;
+                        insertString(str_vec, data);
+                        data.clear();
+                    }
+                }
+                time_read_elapsed = std::chrono::high_resolution_clock::now();
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            } else {
+                time_read_start = std::chrono::high_resolution_clock::now();
+                time_read_elapsed = time_read_start;
+                data += data_acc;
+            }
+        }
+
+    } catch (std::exception& e) {
+        std::cerr << "Error reading values: " << e.what() << "\n";
+        thread_alive = false;
+    }
 }
 
 sensor_values_map parse_json(const std::string &str)
@@ -166,6 +199,7 @@ void run_update()
     std::string humidity;
     std::string id;
 
+    std::cout << "run update\n";
     auto rit = str_vec.rbegin();
     for(; rit != str_vec.rend(); rit ++) {
         sensor_values_map ret = parse_json(*rit);
@@ -196,16 +230,20 @@ void run_update()
 
 int main(int argc, char **argv)
 {
-    if(argc < 3) {
-        std::cerr << "Usage: rtl_433 -R 31 -F json | rtl_cxx device_mac device_id\n";
+    if(argc < 4) {
+        std::cerr << "Usage: " << argv[0] << "/dev/ttyUSBX device_mac device_id\n";
         return 1;
     }
 
-    device_mac = argv[1];
-    device_id = argv[2];
+
+    std::string usb_dev = argv[1];
+    device_mac = argv[2];
+    device_id = argv[3];
 
     //insertString(str_vec, "{\"time\" : \"2019-04-11 21:57:47\", \"model\" : \"TFA-Twin-Plus-30.3049\", \"id\" : 46, \"channel\" : 1, \"battery\" : \"OK\", \"temperature_C\" : 12.900, \"humidity\" : 48, \"mic\" : \"CHECKSUM\"}");
-    std::thread in_thread(read_stdin_values);
+    //insertString(str_vec, "{\"id\" : 37, \"channel\" : 2, \"battery\" : \"OK\", \"temperature_C\" : 23.40, \"humidity\" : 20}");
+
+    std::thread in_thread(t_read_values, usb_dev);
     auto time_start = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> refresh_interval(6 * 60); // 6 min
     //std::chrono::duration<double> refresh_interval(5); // 5 sec
@@ -222,5 +260,5 @@ int main(int argc, char **argv)
     }
 
     in_thread.join();
-    return 0;
+    return 1;
 }
