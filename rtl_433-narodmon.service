@@ -3,7 +3,7 @@ Description=rtl_433
 After=network.target
 [Service]
 ExecStartPre=/root/fix_rtl
-ExecStart=/bin/bash -c "/usr/bin/rtl_433 -R 31 -F json | rtl_ea2_narodmon 'xxxxxxxxxxxx'"
+ExecStart=/bin/bash -c "/usr/bin/rtl_ea2_narodmon /dev/rtl_arduino device_mac bl_id"
 Restart=always
 RestartSec=5
 [Install]
